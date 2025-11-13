@@ -25,7 +25,7 @@
         },
         "codeSendOnSave.endpoint": {
           "type": "string",
-          "default": "http://localhost:8000/api/analyze",
+          "default": "http://localhost:5000/api/analyze",
           "description": "Backend endpoint to receive saved files (POST)."
         },
         "codeSendOnSave.apiKey": {

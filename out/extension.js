@@ -39,7 +39,7 @@ function activate(context) {
     // Helper to read settings
     const settings = {
         enabled: () => config().get("enabled", true),
-        endpoint: () => config().get("endpoint", "http://localhost:5000/api/test/echo"),
+        endpoint: () => config().get("endpoint", "http://localhost:5000/api/analyze"),
         apiKey: () => config().get("apiKey", ""),
         debounceMs: () => config().get("debounceMs", 300),
         exclude: () => config().get("exclude", ["**/node_modules/**", "**/.git/**"])
@@ -61,7 +61,7 @@ function activate(context) {
     async function sendToBackend(task) {
         const endpoint = settings.endpoint();
         const apiKey = settings.apiKey();
-        output.appendLine(`Sending -> ${endpoint}`);
+        output.appendLine(`Sending ${task.uri.fsPath} -> ${endpoint}`);
         try {
             const res = await fetch(endpoint, {
                 method: "POST",
@@ -69,10 +69,11 @@ function activate(context) {
                     "Content-Type": "application/json",
                     ...(apiKey ? { "Authorization": `Bearer ${apiKey}` } : {})
                 },
+                // --- FIX 1: Send 'code' and 'fileName' ---
                 body: JSON.stringify({
-                    path: task.uri.fsPath,
+                    fileName: task.uri.fsPath,
                     language: task.uri.path.split(".").pop() || "",
-                    content: task.content,
+                    code: task.content,
                     timestamp: new Date().toISOString()
                 })
             });
@@ -80,8 +81,31 @@ function activate(context) {
                 const text = await res.text().catch(() => "");
                 throw new Error(`HTTP ${res.status}: ${text}`);
             }
-            output.appendLine(`Sent ${task.uri.fsPath} successfully`);
-            task.attempts = 0;
+            const responseData = await res.json();
+            // Check the nested 'gemini' object
+            if (responseData.gemini && responseData.gemini.analysis) {
+                const model = responseData.gemini.model || 'unknown';
+                output.appendLine(`Analysis received (model: ${model})`);
+                // 2. Show a pop-up notification
+                vscode.window.showInformationMessage(`BrainBug Analysis Complete (using ${model})`, "View Analysis" // Add a button
+                ).then(selection => {
+                    // If the user clicks the button, show the output panel
+                    if (selection === "View Analysis") {
+                        output.show();
+                    }
+                });
+                // 3. Print the full analysis to your "CodeSendOnSave" output channel
+                output.appendLine("==================== BrainBug Analysis ====================");
+                output.appendLine(responseData.gemini.analysis);
+                output.appendLine("===========================================================");
+            }
+            else {
+                // Handle cases where the API returned 200 OK but had an internal error
+                const errorMessage = responseData.error || 'API returned 200 OK but no gemini.analysis field.';
+                output.appendLine(`API Error: ${errorMessage}`);
+                vscode.window.showErrorMessage(`BrainBug Error: ${errorMessage}`);
+            }
+            task.attempts = 0; // Mark as successful
         }
         catch (err) {
             task.attempts = (task.attempts || 0) + 1;
