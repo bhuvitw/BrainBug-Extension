@@ -59,12 +59,15 @@ export function activate(context: vscode.ExtensionContext) {
                     "Content-Type": "application/json",
                     ...(apiKey ? { "Authorization": `Bearer ${apiKey}` } : {})
                 },
-                // --- FIX 1: Send 'code' and 'fileName' ---
+                // --- UPDATE THIS OBJECT ---
                 body: JSON.stringify({
                     fileName: task.uri.fsPath,
                     language: task.uri.path.split(".").pop() || "",
                     code: task.content,
-                    timestamp: new Date().toISOString()
+                    timestamp: new Date().toISOString(),
+                    
+                    // --- ADD THIS LINE FOR THE DEMO ---
+                    userId: "demo-user-123" // Or any hard-coded ID you want
                 })
             });
 
